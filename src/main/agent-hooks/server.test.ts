@@ -3330,6 +3330,30 @@ describe('AgentHookServer prompt-sent telemetry', () => {
     expect(trackMock).toHaveBeenCalledTimes(2)
   })
 
+  it('includes Command Code prompt interaction keys in the IPC snapshot', () => {
+    const server = new AgentHookServer()
+
+    server.ingestRemote(
+      {
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        hasExplicitPrompt: true,
+        promptInteractionKey: 'command-code-transcript-user-1',
+        payload: { state: 'working', prompt: 'rerun', agentType: 'command-code' }
+      },
+      'conn-1'
+    )
+
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      paneKey: PANE,
+      promptInteractionKey: 'command-code-transcript-user-1',
+      state: 'working',
+      prompt: 'rerun',
+      agentType: 'command-code'
+    })
+  })
+
   it('dedupes Command Code direct prompt hooks followed by transcript-backed stop hooks', () => {
     const server = new AgentHookServer()
 
@@ -5042,13 +5066,15 @@ describe('Pi hook normalization', () => {
     expect(result?.payload.agentType).toBe('pi')
   })
 
-  it('session_shutdown maps to done', () => {
+  it('session_shutdown leaves a running Pi status intact', () => {
     const result = _internals.normalizeHookPayload(
       'pi',
       buildBody({ hook_event_name: 'session_shutdown' }),
       'production'
     )
-    expect(result?.payload.state).toBe('done')
+    // Why: Pi also emits shutdown when reloading or replacing its in-process
+    // session while the PTY stays alive; only agent_end proves turn completion.
+    expect(result).toBeNull()
   })
 
   it('done preserves the cached lastAssistantMessage from a prior message_end', () => {

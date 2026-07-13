@@ -17,14 +17,6 @@ patchedDependencies:
   '@xterm/addon-serialize@0.15.0-beta.287': config/patches/@xterm__addon-serialize@0.15.0-beta.287.patch
 shamefullyHoist: true
 minimumReleaseAge: 4320
-minimumReleaseAgeExclude:
-  - electron@43.1.0
-  - node-abi@4.33.0
-  - typescript@7.0.2
-  - '@typescript/typescript-*'
-  - mermaid@11.15.0
-  - '@mermaid-js/parser@1.1.1'
-  - serve-sim@0.1.40
 # Why: v10 onlyBuiltDependencies was an allowlist; packages that ask to
 # build but were never on that list stay false so install stays non-interactive.
 allowBuilds:
