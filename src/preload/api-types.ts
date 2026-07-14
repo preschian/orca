@@ -3021,6 +3021,7 @@ export type PreloadApi = {
     fetchInactiveCodexAccounts: () => Promise<void>
     refreshMiniMax: () => Promise<RateLimitState>
     refreshGrok: () => Promise<RateLimitState>
+    refreshCursor: () => Promise<RateLimitState>
     onUpdate: (callback: (state: RateLimitState) => void) => () => void
   }
   minimaxCredentials: {
