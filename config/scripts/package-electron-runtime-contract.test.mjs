@@ -7,6 +7,19 @@ const projectDir = resolve(import.meta.dirname, '../..')
 const packageJson = JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf8'))
 
 describe('Electron runtime package contract', () => {
+  it('keeps shared WebGL atlas invalidation reproducible from vendored source', () => {
+    const patch = readFileSync(
+      join(projectDir, 'config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch'),
+      'utf8'
+    )
+
+    expect(patch).toContain('diff --git a/src/Types.ts b/src/Types.ts')
+    expect(patch).toContain('readonly clearModelGeneration: number')
+    expect(patch).toContain('const generation = this._atlas.clearModelGeneration')
+    expect(patch).toContain('this.clearModelGeneration++')
+    expect(patch).toContain('this._atlas._clearModelGeneration||0')
+  })
+
   it('keeps root postinstall as the single Electron binary install owner', () => {
     expect(packageJson.scripts.postinstall).toBe('node config/scripts/rebuild-native-deps.mjs')
     expect(packageJson.pnpm.onlyBuiltDependencies).not.toContain('electron')
@@ -119,6 +132,46 @@ describe('Electron runtime package contract', () => {
       macWorkflow.jobs['build-mac'].steps,
       'Publish release artifacts (macOS)',
       undefined
+    )
+  })
+
+  it('packages and release-gates the SSH relay watcher child', () => {
+    const relayBuild = readFileSync(join(projectDir, 'config/scripts/build-relay.mjs'), 'utf8')
+    const builderConfig = readFileSync(
+      join(projectDir, 'config/electron-builder.config.cjs'),
+      'utf8'
+    )
+    const remoteCommands = readFileSync(
+      join(projectDir, 'src/main/ssh/ssh-remote-commands.ts'),
+      'utf8'
+    )
+    const releaseWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/release-cut.yml'), 'utf8')
+    )
+    const macWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/release-mac-build.yml'), 'utf8')
+    )
+
+    expect(relayBuild).toContain("'parcel-watcher-process-entry.ts'")
+    expect(relayBuild).toContain("outfile: join(outDir, 'relay-watcher.js')")
+    expect(relayBuild).toContain("readFileSync(join(outDir, 'relay-watcher.js'))")
+    expect(builderConfig).toContain("from: 'out/relay'")
+    expect(remoteCommands).toContain("joinRemotePath(host, remoteRelayDir, 'relay-watcher.js')")
+
+    const assertRelayGate = (steps, publishStepName) => {
+      const names = steps.map((step) => step.name)
+      const gate = steps.find((step) => step.name === 'Gate SSH relay watcher process isolation')
+      expect(gate['continue-on-error']).toBeUndefined()
+      expect(gate.run).toContain('node config/scripts/relay-watcher-fault-harness.mjs')
+      expect(names.indexOf('Build app')).toBeLessThan(names.indexOf(gate.name))
+      expect(names.indexOf(gate.name)).toBeLessThan(names.indexOf(publishStepName))
+    }
+
+    assertRelayGate(releaseWorkflow.jobs.build.steps, 'Publish release artifacts (Linux)')
+    assertRelayGate(macWorkflow.jobs['build-mac'].steps, 'Publish release artifacts (macOS)')
+    const releaseNames = releaseWorkflow.jobs.build.steps.map((step) => step.name)
+    expect(releaseNames.indexOf('Gate SSH relay watcher process isolation')).toBeLessThan(
+      releaseNames.indexOf('Build Windows release artifacts')
     )
   })
 
@@ -495,6 +548,9 @@ describe('Electron runtime package contract', () => {
     expect(packageScripts['test:e2e:terminal-rendering-golden']).toContain(
       'terminal-raw-emoji-table-scroll-restore.spec.ts'
     )
+    expect(packageScripts['test:e2e:terminal-rendering-golden']).toContain(
+      'terminal-webgl-atlas-budget.spec.ts'
+    )
     expect(packageScripts['test:e2e:terminal-rendering-golden']).not.toContain(
       'terminal-long-table-scroll-restore.spec.ts'
     )
@@ -508,6 +564,8 @@ describe('Electron runtime package contract', () => {
       expect(runStep?.run).toContain('pnpm run test:e2e:terminal-rendering-golden')
     }
     expect(pullRequestPaths).toContain('tests/e2e/terminal-raw-emoji-table-scroll-restore.spec.ts')
+    expect(pullRequestPaths).toContain('tests/e2e/terminal-webgl-atlas-budget.spec.ts')
+    expect(pullRequestPaths).toContain('config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch')
     expect(pullRequestPaths).toContain('tests/e2e/fixtures/terminal-emoji-table.md')
     expect(pullRequestPaths).toContain('src/renderer/src/lib/pane-manager/**')
     expect(releaseBuildNeeds).not.toContain('terminal-rendering-golden')
