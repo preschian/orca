@@ -1635,9 +1635,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       if (tourProgression === 'reveal-sidebar-and-advance') {
         // Why: the split can be triggered by keyboard/menu paths while the
         // sidebar is closed, but the next tour target lives in the sidebar.
+        // Clear peek so a mid-hover edge peek cannot leave a stale overlay flag
+        // after the tour pins the sidebar open.
         return {
           featureInteractions: next,
           sidebarOpen: true,
+          sidebarPeek: false,
           activeContextualTourStepIndex: s.activeContextualTourStepIndex + 1
         }
       }

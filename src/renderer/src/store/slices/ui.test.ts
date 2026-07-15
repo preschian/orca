@@ -3042,7 +3042,9 @@ describe('createUISlice contextual tours', () => {
     stubContextualTourTargets([
       '[data-contextual-tour-target="terminal-pane-split-target"], [data-contextual-tour-target="workspace-agent-terminal-tip"]'
     ])
-    store.setState({ sidebarOpen: false })
+    // Why: tour reveal must clear a mid-hover edge peek so the sidebar pins
+    // open instead of leaving a stale overlay flag behind.
+    store.setState({ sidebarOpen: false, sidebarPeek: true })
     store.getState().hydratePersistedUI(makeAutoTourEligibleUI())
     store
       .getState()
@@ -3053,6 +3055,7 @@ describe('createUISlice contextual tours', () => {
     store.getState().recordFeatureInteraction('terminal-pane-split')
 
     expect(store.getState().sidebarOpen).toBe(true)
+    expect(store.getState().sidebarPeek).toBe(false)
     expect(store.getState().activeContextualTourId).toBe('workspace-agent-sessions')
     expect(store.getState().activeContextualTourStepIndex).toBe(1)
     expect(store.getState().contextualToursSeenIds).toEqual([])
